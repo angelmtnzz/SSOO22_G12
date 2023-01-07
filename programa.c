@@ -13,6 +13,7 @@
 #include <signal.h>
 #include <ctype.h>
 #include <time.h>
+#include <string.h>
 
 #define NUMCLIENTES 20;
 
@@ -23,24 +24,25 @@
 //	mutex_terminarPrograma, para controlar la variable terminar programa.
 pthread_mutex_t mutex_log, mutex_clientes, mutex_solicitudes, mutex_terminarPrograma;
 
-//Contadores
+//Variables
 //	cliRed, controlar numero de clientes de red. (Para dar numero al id)
 //	cliApp, controlar numero de clientes de app. (Para dar numero al id)
 //	cliSol, controlar numero de solicitudes.
 //	terminarPrograma, variable para manejar el fin del programa.
-//	clientesEnCola, controla el numero de clientes en cola para el metodo de reordenacion.
+//	clientesEnCola, controla el numero de clientes en cola.
 int contCliRed, contCliApp, contCliSolicitud, terminarPrograma, clientesEnCola;
 
 struct cliente{
-	//Prioridad se asigna por FIFO.
-	int prioridad;
+	//Tipo de cliente
+	char id[10];
 	//Valores: 0, sin atender; 1, siendo atendido; 2, sin atender.
 	int atendido;
-	//Valores: 0, no solicitud; 1, solicitud enviada.
-	int solicitud;
 	//Tipo de cliente.
 	int tipo;
-	char id[10];
+	//Valores: 0, no solicitud; 1, solicitud enviada.
+	int solicitud;
+	//Prioridad se asigna por FIFO.
+	int prioridad;
 }
 
 //Inicializado lista de clientes
@@ -51,7 +53,15 @@ File *logFile;
 const char *NombreFichero = "RegistroAverias"
 
 //Declaramos funciones
-//	nuevoCliente
+//	nuevoCliente, crea nuevos clientes y los añade a la lista de clientes.
+//	accionesCliente, maneja las acciones de los clientes.
+//	accionesTecnico, maneja las acciones de los tecnicos.
+//	accionesTecnicoDomiciliario, maneja las acciones de los tecnicos domiciliarios.
+//	accionesEncargado, maneja las acciones de los encargados.
+//	terminarPrograma, da valor de 1 a la variable terminarPrograma para no aceptar más solicitudes.
+//	reordenarLista, con el algortimo de la burbuja, reordena la lista cada vez que entra un cliente en la misma por prioridad.
+//	writeLogMessage, metodo para escribir en logFile.
+//	calcularAleatorio, metodo para calcular un numero aleatorio comprendido entre el primer y el segundo parámetro incluidos.
 void nuevoCliente(int sig);
 void *accionesCliente(void *arg);
 void *accionesTecnico(void *arg);
@@ -60,8 +70,12 @@ void *accionesEncargado(void *arg);
 void terminarPrograma(int sig);
 void reordenarLista();
 void writeLogMessage();
+int calcularAleatorio(int min, int max);
 
 int main (int argc, char *argv[]){
+
+	//Iniciamos semilla para aleatorios
+	srand(time(NULL));
 
 	//Creamos hilos como variables locales
 	pthread_t tecnico_1, tecnico_2, resprep_1, resprep_2, encargado, atencionDom;
@@ -70,14 +84,15 @@ int main (int argc, char *argv[]){
 	pthread_mutex_init(&mutex_log, NULL);
 	pthread_mutex_init(&mutex_clientes, NULL);
 	pthread_mutex_init(&mutex_solicitudes, NULL);
+	pthread_mutex_init(&mutex_terminarPrograma, NULL);
 
 	//Iniciamos hilos
-	pthread_create(&tecnico_1, NULL, funcion, NULL);
-	pthread_create(&tecnico_2, NULL, funcion, NULL);
-	pthread_create(&resprep_1, NULL, funcion, NULL);
-	pthread_create(&resprep_2, NULL, funcion, NULL);
-	pthread_create(&encargado, NULL, funcion, NULL);
-	pthread_create(&atencionDom, NULL, funcion, NULL);
+	pthread_create(&tecnico_1, NULL, accionesTecnico, NULL);
+	pthread_create(&tecnico_2, NULL, accionesTecnico, NULL);
+	pthread_create(&resprep_1, NULL, accionesTecnico, NULL);
+	pthread_create(&resprep_2, NULL, accionesTecnico, NULL);
+	pthread_create(&encargado, NULL, accionesEncargado, NULL);
+	pthread_create(&atencionDom, NULL, accionesTecnicoDomiciliario, NULL);
 
 	//Armar señales
 	struct sigaction ss = {0};
@@ -114,9 +129,131 @@ int main (int argc, char *argv[]){
 	logFile = fopen("RegistroAverias.log", "w");
 	writeLogMessage("*SISTEMA*: ", "NUEVA EJECUCIÓN");
 	fclose(fichero);
+
+	//Espera infinita para señales.
+	while(1){
+
+		pthread_mutex_lock(&mutex_terminarPrograma);
+
+		//Mientras terminarPrograma tenga valor 0, seguimos ejecutando el programa.
+		if(terminarPrograma == 0){
+			pthread_mutex_unlock(&mutex_terminarPrograma);
+			pause();
+
+		//Para terminar el programa, los hilos incrementarán el contador terminarPrograma desde su valor=1 hasta 7 (6 hilos).	
+		}else if(terminarPrograma == 7){
+			pthread_mutex_unlock(&mutex_terminarPrograma);
+			writeLogMessage("*SISTEMA*: ", "FIN EJECUCIÓN");
+			exit(0);
+		}
+	}
+}
+
+void nuevoCliente(int sig){
+
+	pthread_mutex_lock(&terminarPrograma);
+	//Comprobamos si puden llegar más solicitudes.
+	if(terminarPrograma==1){
+		pthread_mutex_unlock(&terminarPrograma);
+		printf("SISTEMA: Terminando programa. Solicitud de nuevo cliente rechazada.");
+		writeLogMessage("*SISTEMA*: ", "Terminando programa. Solicitud de nuevo cliente rechazada.");
+
+	//Si la variable es distinta de 1, quiere decir que es 0(ejecutando) o >1(matando hilos) y pueden seguir llegando solicitudes.
+	//																	 ???????????????????
+	}else{
+		pthread_mutex_unlock(&terminarPrograma);
+
+		//Comprobamos si hay sitio en la cola.
+		pthread_mutex_lock(&clientesEnCola);
+
+		//Lista de clientes con sitios libres.
+		if(clientesEnCola < 20){
+			pthread_mutex_unlock(&clientesEnCola);
+
+			if(sig == SIGUSR1){
+				//Incrementamos contador de clientes de APP.
+				contCliApp++;
+				//Creamos ID para el nuevo cliente de APP.
+				char nuevoIdApp[10];
+				sprintf(nuevoIdApp, "cliApp_%d", contCliApp);
+				//Generamos una prioridad para el nuevo cliente de APP.
+				int prioridadApp = calcularAleatorio(1, 10);
+				//Creamos el nuevo cliente de APP y añadimos sus parametros establecidos por el momento.
+				struct cliente clienteApp = [nuevoIdApp, 0, 0, 0, prioridadApp];
+				//Añadimos el nuevo cliente de APP a la lista de clientes.
+				pthread_mutex_lock(&mutex_clientes);
+				clientes[clientesEnCola] = clienteApp;
+				pthread_mutex_unlock(&mutex_clientes);
+				//Reordenamos la lista en funcion de la prioridad.
+				reordenarListaClientes();
+				//Inicializamos y creamos hilo para el nuevo cliente de APP.
+				pthread_t nuevoCliente;
+				pthread_create(&nuevoCliente, NULL, accionesCliente, (void*)nuevoIdApp);
+				//Imprimimos por pantalla y escribimos en el log.
+				printf("SISTEMA: Nuevo cliente de APP añadido a la lista.");
+				writeLogMessage("*SISTEMA*: ", "Nuevo cliente de APP añadido a la lista.");
+
+			}else if(sig == SIGUSR2){
+				//Incrementamos contador de clientes de RED.
+				contCliRed++;
+				//Creamos ID para el nuevo cliente de RED.
+				char nuevoIdRed[10];
+				sprintf(nuevoIdRed, "cliRed_%d", contCliRed);
+				//Generamos una prioridad para el nuevo cliente de RED.
+				int prioridadRed = calcularAleatorio(1, 10);
+				//Creamos el nuevo cliente de RED y añadimos sus parametros establecidos por el momento.
+				struct cliente clienteRed = [nuevoIdRed, 0, 1, 0, prioridadRed];
+				//Añadimos el nuevo cliente de RED a la lista de clientes.
+				pthread_mutex_lock(&mutex_clientes);
+				clientes[clientesEnCola] = clienteRed;
+				pthread_mutex_unlock(&mutex_clientes);
+				//Reordenamos la lista en funcion de la prioridad.
+				reordenarListaClientes();
+				//Inicializamos y creamos hilo para el nuevo cliente de RED.
+				pthread_t nuevoCliente;
+				pthread_create(&nuevoCliente, NULL, accionesCliente, (void*)nuevoIdRed);
+				//Imprimimos por pantalla y escribimos en el log.
+				printf("SISTEMA: Nuevo cliente de RED añadido a la lista.");
+				writeLogMessage("*SISTEMA*: ", "Nuevo cliente de RED añadido a la lista.");
+			}
+
+		//Lista de clientes llena.	
+		}else{
+			pthread_mutex_unlock(&clientesEnCola);
+			printf("SISTEMA: Lista de clientes llena. Solicitud de nuevo cliente rechazada.");
+			writeLogMessage("*SISTEMA*: ", "Lista de clientes llena. Solicitud de nuevo cliente rechazada.");
+
+		}
+	}
+}
+
+void *accionesCliente(void *arg){
+
+}
+
+void *accionesTecnico(void *arg){
+
+}
+
+void *accionesTecnicoDomiciliario(void *arg){
+
+}
+
+void *accionesEncargado(void *arg){
+
+}
+
+void terminarPrograma(int sig){
+	pthread_mutex_lock(&mutex_terminarPrograma);
+	//Variable terminarPrograma con valor 1, no deja que lleguen más solicitudes, prepara el final de programa.
+	terminarPrograma = 1;
+	pthread_mutex_unlock(&mutex_terminarPrograma);
+
 }
 
 void reordenarListaClientes(){
+
+	pthread_mutex_lock(&mutex_clientes);
 
 	struct clienteAux;
 
@@ -132,6 +269,7 @@ void reordenarListaClientes(){
 			}
 		}
 	}
+	pthread_mutex_unlock(&mutex_clientes);
 }
 
 void writeLogMessage(char *id, char *msg) {
@@ -143,7 +281,13 @@ void writeLogMessage(char *id, char *msg) {
 	strftime(stnow, 25, "%d/%m/%y %H:%M:%S", tlocal);
 
 	// Escribimos en el log
+	pthread_mutex_lock(&mutex_log);
 	logFile = fopen(logFileName, "a");
 	fprintf(logFile, "[%s] %s: %s\n", stnow, id, msg);
 	fclose(logFile);
+	pthread_mutex_unlock(&mutex_log);
+}
+
+int calcularAleatorio(int min, int max){
+	return rand()%(max-min+1)+min;
 }
