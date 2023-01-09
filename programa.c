@@ -31,9 +31,9 @@ pthread_mutex_t mutex_log, mutex_clientes, mutex_solicitudes, mutex_terminarProg
 pthread_cond_t cond_clienteAtendido, cond_domiciliaria;
 
 //Variables
-//	cliRed, controlar numero de clientes de red. (Para dar numero al id)
-//	cliApp, controlar numero de clientes de app. (Para dar numero al id)
-//	cliSolicitud, controlar numero de solicitudes para atencion domiciliaria.
+//	contCliRed, controlar numero de clientes de red. (Para dar numero al id)
+//	contCliApp, controlar numero de clientes de app. (Para dar numero al id)
+//	contCliSolicitud, controlar numero de solicitudes para atencion domiciliaria.
 //	contCliCola, controla el numero de clientes en cola.
 //	terminarPrograma, variable para manejar el fin del programa.
 int contCliRed, contCliApp, contCliSolicitud, contCliCola, terminarPrograma;
@@ -491,6 +491,34 @@ void *accionesTecnico(void *arg){
 
 void *accionesTecnicoDomiciliario(void *arg){
 
+	char *id = *(char*)arg;
+
+	//1. Comprueba el numero de solicitudes y se queda bloqueado (cond_wait) mientras sea menor que 4.
+
+	//2. Guardamos en el log que comienza la atencion.
+	printf("%s: Comenzamos la atención al cliente.\n", id);
+	writeLogMessage(id, "Comenzamos la atención al cliente.");
+
+	//3. Duerme un segundo por petición.
+
+	//4. Guardamos en log que hemos atendido a uno.
+	printf("%s: Atendido un cliente.\n", id);
+	writeLogMessage(id, "Atendido un cliente.");
+
+	//5. Cambia el flag de solicitud a 0.
+	pthread_mutex_lock(&);
+
+	pthread_mutex_unlock(&);
+
+	//6. Cuando el ultimo es atendido, contCliSolicitud=0;
+
+	//7. Guardamos en el log que se ha finalizado la atencion domiciliaria.
+	printf("%s: Finalizada atencion domiciliaria.\n", id);
+	writeLogMessage(id, "Finalizada atencion domiciliaria.");
+
+	//8. Se avisa a los que esperaban por solicitud domiciliaria que se ha finalizado la atencion.
+
+	//9. Volvemos al 1.
 }
 
 void *accionesEncargado(void *arg){
