@@ -92,6 +92,9 @@ int buscarCliente(char *id);
 //	eliminarCliente, elimina el cliente pasado por parametro por su id. Intercambiando posiciones con el cliente a la derecha y poniendo a NULL el últmo.
 void eliminarCliente(char *id);
 
+//	calcularTiempoAtencion, calcula el tiempo de atencion segun el tipo de la llamada recibida.
+int calcularTiempoAtencion(int tipoDeLlamada)
+
 int main (int argc, char *argv[]){
 
 	//Iniciamos semilla para aleatorios
@@ -432,6 +435,8 @@ void *accionesTecnico(void *arg){
 	int tipoDeLlamada = calcularAleatorio(1, 10);
 	int tiempoDeAtencion = 1;
 
+	int clienteEncontradoTecnico = 0;
+
 	do{
 
 		//1. Buscar cliente para atender de su tipo, atendiendo a prioridad y sino FIFO.
@@ -440,7 +445,7 @@ void *accionesTecnico(void *arg){
 		pthread_mutex_unlock(&mutex_clientes);
 
 
-	}while();
+	}while(clienteEncontradoTecnico);
 	sleep(1);
 
 	//2. Cambiamos el flag de atendido.
@@ -449,20 +454,7 @@ void *accionesTecnico(void *arg){
 	pthread_mutex_unlock(&mutex_clientes);
 
 	//3. Calculamos el tiempo de atención.
-	//	Todo en regla, 1-4s y siguen.
-	if(tipoDeLlamada <= 8){
-		tiempoDeAtencion = calcularAleatorio(1,4);
-
-	//	Mal identificados, 2-6s y siguen.
-	}else if(tipoDeLlamada <= 9){
-		tiempoDeAtencion = calcularAleatorio(2,6);
-
-	}
-	// Compañia erronea, 1-2s y abandonan.
-	}esle{
-		tiempoDeAtencion = calcularAleatorio(1,2);
-
-	}
+	tiempoDeAtencion = calcularTiempoAtencion(tipoDeLlamada);
 
 	//4. Guardamos en el log que comienza la atendion.
 	printf("%s: Comenzamos la atención al cliente.\n", id);
@@ -503,6 +495,57 @@ void *accionesTecnicoDomiciliario(void *arg){
 
 void *accionesEncargado(void *arg){
 
+	char *id = *(char*)arg;
+	struct cliente clientePorAtenderEncargado = [NULL, 0, 0, 0, 0];
+
+	int clienteEncontradoEncargado = 0;
+
+	int tipoDeLlamadaEncargado = calcularAleatorio(1, 10);
+	int tiempoDeAtencionEncargado = 1;
+
+	do{
+
+		//1. Busca cliente para atender. (1. red, 2. app, 3. prioridad, 4. FIFO).
+
+	}while(clienteEncontradoEncargado == 0);
+	sleep(3);
+
+	//2. Cambiamos el flag de atendido.
+	pthread_mutex_lock(&mutex_clientes);
+	clientePorAtenderEncargado.atendido = 1;
+	pthread_mutex_unlock(&mutex_clientes);
+
+	//3. Calculamos el tiempo de atencion.
+	tiempoDeAtencionEncargado = calcularTiempoAtencion(tipoDeLlamadaEncargado);
+
+	//4. Guardamos en el log que comienza la atendion.
+	printf("%s: Comenzamos la atención al cliente.\n", id);
+	writeLogMessage(id, "Comenzamos la atención al cliente.");
+
+	//5. Dormimos el tiempo de atencion.
+	sleep(tiempoDeAtencionEncargado);
+
+	//6 y 7. Guardamos en el log que finaliza la atencion y el motivo.
+	printf("%s: Finalizamos la atención al cliente.\n", id);
+	writeLogMessage(id, "Finalizamos la atención al cliente.");
+
+	if(tipoDeLlamada <= 8){
+		printf("%s: Motivo: Todo en orden.\n", id);
+		writeLogMessage(id, "Motivo: Todo en orden.");
+	}else if(tipoDeLlamada <= 9){
+		printf("%s: Motivo: Cliente mal identificado.\n", id);
+		writeLogMessage(id, "Motivo: Cliente mal identificado.");
+	}else{
+		printf("%s: Motivo: Compañia erronea.\n", id);
+		writeLogMessage(id, "Motivo: Compañia erronea.");
+	}
+
+	//8. Cambiamos flag atendido.
+	pthread_mutex_lock(&mutex_clientes);
+	clientePorAtenderEncargado.atendido = 2;
+	pthread_mutex_unlock(&mutex_clientes);
+
+	//9. Vuelta al paso 1 y seguimos buscando.
 }
 
 void terminarPrograma(int sig){
@@ -573,4 +616,24 @@ void eliminarCliente(char *id){
 		clientes[i] = clientes[i+1];
 	}
 	clientes[contCliCola-1] = ultimo;
+}
+
+int calcularTiempoAtencion(int tipoDeLlamada){
+
+	int tiempoDeAtencion = 0;
+
+	//	Todo en regla, 1-4s y siguen.
+	if(tipoDeLlamada <= 8){
+		tiempoDeAtencion = calcularAleatorio(1,4);
+
+	//	Mal identificados, 2-6s y siguen.
+	}else if(tipoDeLlamada <= 9){
+		tiempoDeAtencion = calcularAleatorio(2,6);
+
+	// Compañia erronea, 1-2s y abandonan.
+	}esle{
+		tiempoDeAtencion = calcularAleatorio(1,2);
+	}
+
+	return tiempoDeAtencion;
 }
