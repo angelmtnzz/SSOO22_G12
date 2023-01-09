@@ -346,7 +346,9 @@ void *accionesCliente(void *arg){
 		printf("%s: Estoy siendo atendido.\n", id);
 		writeLogMessage(id, "Estoy siendo atendido.");	
 
-		//Espera por señal del tecnico. (Similar a un pause).
+		//Espera por señal del tecnico. (Similar a un pause). Siempre asociados a un mutex.	
+		//	Wait debe realizarse con mutex cerrado.
+		//	El hilo se suspende hasta que otro señaliza la condición y el mutex asociado se desbloquea.
 		pthread_cond_wait(&cond_clienteAtendido, &mutex_clientes);
 	}
 
@@ -423,6 +425,76 @@ void *accionesCliente(void *arg){
 
 void *accionesTecnico(void *arg){
 
+	char *id = *(char*)arg;
+	struct cliente clientePorAtender = [NULL, 0, 0, 0, 0];
+
+	//Tipo de llamada para tiempos de atencion.
+	int tipoDeLlamada = calcularAleatorio(1, 10);
+	int tiempoDeAtencion = 1;
+
+	do{
+
+		//1. Buscar cliente para atender de su tipo, atendiendo a prioridad y sino FIFO.
+		pthread_mutex_lock(&mutex_clientes);
+
+		pthread_mutex_unlock(&mutex_clientes);
+
+
+	}while();
+	sleep(1);
+
+	//2. Cambiamos el flag de atendido.
+	pthread_mutex_lock(&mutex_clientes);
+	clientePorAtender.atendido = 1;
+	pthread_mutex_unlock(&mutex_clientes);
+
+	//3. Calculamos el tiempo de atención.
+	//	Todo en regla, 1-4s y siguen.
+	if(tipoDeLlamada <= 8){
+		tiempoDeAtencion = calcularAleatorio(1,4);
+
+	//	Mal identificados, 2-6s y siguen.
+	}else if(tipoDeLlamada <= 9){
+		tiempoDeAtencion = calcularAleatorio(2,6);
+
+	}
+	// Compañia erronea, 1-2s y abandonan.
+	}esle{
+		tiempoDeAtencion = calcularAleatorio(1,2);
+
+	}
+
+	//4. Guardamos en el log que comienza la atendion.
+	printf("%s: Comenzamos la atención al cliente.\n", id);
+	writeLogMessage(id, "Comenzamos la atención al cliente.");
+
+	//5. Dormimos el tiempo de atención.
+	sleep(tiempo de tiempoDeAtencion);
+
+	//6 y 7. Guardamos en el log que finaliza la atencion y el motivo.
+	printf("%s: Finalizamos la atención al cliente.\n", id);
+	writeLogMessage(id, "Finalizamos la atención al cliente.");
+
+	if(tipoDeLlamada <= 8){
+		printf("%s: Motivo: Todo en orden.\n", id);
+		writeLogMessage(id, "Motivo: Todo en orden.");
+	}else if(tipoDeLlamada <= 9){
+		printf("%s: Motivo: Cliente mal identificado.\n", id);
+		writeLogMessage(id, "Motivo: Cliente mal identificado.");
+	}else{
+		printf("%s: Motivo: Compañia erronea.\n", id);
+		writeLogMessage(id, "Motivo: Compañia erronea.");
+	}
+
+	//8. Cambiamos el flag de atendido  
+	pthread_mutex_lock(&mutex_clientes);
+	clientePorAtender.atendido = 2;
+	pthread_mutex_unlock(&mutex_clientes);
+
+	//9. Mira si toca descanso. (Cada 5 clientes atendidos).
+
+	//10. Vuelta a buscar el siguiente.
+
 }
 
 void *accionesTecnicoDomiciliario(void *arg){
@@ -445,7 +517,7 @@ void reordenarListaClientes(){
 
 	pthread_mutex_lock(&mutex_clientes);
 
-	struct clienteAux;
+	struct cliente clienteAux = [NULL, 0, 0, 0, 0];
 
 	for(int i=0; i<contCliCola; i++){
 		for(int j=0; j<contCliCola-1; j++){
