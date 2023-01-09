@@ -18,107 +18,137 @@
 #define NUMCLIENTES 20;
 #define MAXSOLDOMICILIO 4;
 
-//Semáforos
-//	mutex_log, para controlar la escritura en los logs.
-//	mutex_clientes, para controlar el acceso a la lista de clientes y su modificacion.
-//	mutex_solicitudes, para controlar el acceso al contador de solicitdes domiciliarias.
-//	mutex_terminarPrograma, para controlar la variable terminar programa.
-pthread_mutex_t mutex_log, mutex_clientes, mutex_solicitudes, mutex_terminarPrograma;
+//Semaforos para controlar a los empleados segun el cliente a atender
+pthread_mutex_t mutex_Clientes;
 
-//Creamos variable de condicion. Asociadas a un mutex.
-//	cond_clienteAtendido, asociado al mutex_clientes, espera a la señal del técnico.
-//	cond_domiciliaria, asociado co_solicitudes, ???.
-pthread_cond_t cond_clienteAtendido, cond_domiciliaria;
+//Semaforo para controlar el acceso al fichero Log
+pthread_mutex_t mutex_Log;
 
-//Variables
-//	contCliRed, controlar numero de clientes de red. (Para dar numero al id)
-//	contCliApp, controlar numero de clientes de app. (Para dar numero al id)
-//	contCliSolicitud, controlar numero de solicitudes para atencion domiciliaria.
-//	contCliCola, controla el numero de clientes en cola.
-//	terminarPrograma, variable para manejar el fin del programa.
+//Semaforo para controlar los clientes que esperan la atencion domiciliaria
+pthread_mutex_t mutex_Solicitudes;
+
+//Semaforo para controlar la variable terminarPrograma
+pthread_mutex_t terminarPrograma;
+
+//Variable de condicion asociada al semaforo de cliente
+pthread_cond_t cond_clienteAtendido;
+
+//Variable de condicion asociada al semaforo de Solicitudes Domiciliarias
+pthread_cond_t cond_domiciliaria;
+
+/* VARIABLES GLOBALES
+ * contCliRed, contador de clientes de red. (Para dar numero al id)
+ * contCliApp, contador de clientes de app. (Para dar numero al id)
+ * contCliSol, contador de clientes que solicitan atencion domiciliaria.
+ * contCliCola, contador de clientes en cola 
+ * terminarPrograma, variable para manejar el fin del programa.
+ */
 int contCliRed, contCliApp, contCliSolicitud, contCliCola, terminarPrograma;
 
 struct cliente{
-	//Tipo de cliente
+	//id sera una cadena de caracteres
 	char id[10];
-	//Valores: 0, sin atender; 1, siendo atendido; 2, atendido.
+
+	/* atendido sera 0 si el cliente no está atendido
+	 * , sera 1 si el cliente esta siendo atendido
+	 * y sera 2 si ya ha sido atendido
+	 */
 	int atendido;
-	//Tipo de cliente.
+
+	/* tipo sera 0 si cliente es de tipo app
+	 * y sera 1 si es de tipo red
+	 */
 	int tipo;
-	//Valores: 0, no solicitud; 1, solicitud enviada.
+
+	/* solicitud sera un 0 si el cliente no solicita
+	 * atencion domiciliaria
+	 * y sera 1 si la ha solicitado
+	 */
 	int solicitud;
-	//Prioridad se asigna por FIFO.
+
+	/* los clientes tendran un numero de prioridad
+	 * aleatorio entre 1 y 10
+	 */
 	int prioridad;
 }
 
-//Inicializado lista de clientes
+//Declaracion de lista de clientes
 struct cliente *clientes;
 
-//Fichero log donde se escribiran las acciones
-File *logFile;
-const char *NombreFichero = "RegistroAverias"
+//Fichero log donde se escribiran las acciones correspondientes
+FILE *logFile;
+const char *NombreFichero = "registroAverias.log";
 
-//Declaramos funciones
+
+//Declaramos las funciones a utilizar para la practica
+
 //nuevoCliente, crea nuevos clientes y los añade a la lista de clientes.
 void nuevoCliente(int sig);
 
-//	accionesCliente, maneja las acciones de los clientes.
+//accionesCliente, maneja las acciones de los clientes.
 void *accionesCliente(void *arg);
 
-//	accionesTecnico, maneja las acciones de los tecnicos.
+//accionesTecnico, maneja las acciones de los tecnicos.
 void *accionesTecnico(void *arg);
 
-//	accionesTecnicoDomiciliario, maneja las acciones de los tecnicos domiciliarios.
+//accionesTecnicoDomiciliario, maneja las acciones del tecnico domiciliario.
 void *accionesTecnicoDomiciliario(void *arg);
 
-//	accionesEncargado, maneja las acciones de los encargados.
+//accionesEncargado, maneja las acciones del encargado.
 void *accionesEncargado(void *arg);
 
-//	terminarPrograma, da valor de 1 a la variable terminarPrograma para no aceptar más solicitudes.
+/* terminarPrograma, da valor de 1 a la variable terminarPrograma
+ * para no aceptar más solicitudes.
+ */
 void terminarPrograma(int sig);
 
-//	reordenarLista, con el algortimo de la burbuja, reordena la lista cada vez que entra un cliente en la misma por prioridad.
+/* reordenarLista, con el algortimo de la burbuja, reordena la 
+ * lista por prioridad cada vez que entra un cliente en la misma.
+ */
 void reordenarLista();
 
-//	writeLogMessage, metodo para escribir en logFile.
+//writeLogMessage, metodo para escribir en logFile.
 void writeLogMessage(char *id, char *msg);
 
-//	calcularAleatorio, metodo para calcular un numero aleatorio comprendido entre el primer y el segundo parámetro incluidos.
+//calcularAleatorio, metodo para calcular un numero aleatorio comprendido entre el primer y el segundo parámetro incluidos.
 int calcularAleatorio(int min, int max);
 
-//	buscarCliente, busca el cliente en la lista de clientes por su id.
+//buscarCliente, busca el cliente en la lista de clientes por su id.
 int buscarCliente(char *id);
 
-//	eliminarCliente, elimina el cliente pasado por parametro por su id. Intercambiando posiciones con el cliente a la derecha y poniendo a NULL el últmo.
+/* eliminarCliente, elimina el cliente pasado por parametro por su id.
+ * Intercambiando posiciones con el cliente a la derecha y poniendo a NULL
+ * el último.
+ */
 void eliminarCliente(char *id);
 
-//	calcularTiempoAtencion, calcula el tiempo de atencion segun el tipo de la llamada recibida.
-int calcularTiempoAtencion(int tipoDeLlamada)
-
+//Inicio del main 
 int main (int argc, char *argv[]){
 
 	//Iniciamos semilla para aleatorios
 	srand(time(NULL));
 
-	//Creamos hilos como variables locales
-	pthread_t tecnico_1, tecnico_2, resprep_1, resprep_2, encargado, atencionDom;
-
-	//Iniciamos semáforos
-	pthread_mutex_init(&mutex_log, NULL);
-	pthread_mutex_init(&mutex_clientes, NULL);
-	pthread_mutex_init(&mutex_solicitudes, NULL);
-	pthread_mutex_init(&mutex_terminarPrograma, NULL);
+	//Declaracion de hilos como variables locales
+	phtread_t tecnico_1, tecnico_2;
+	phtread_t respRep_1, respRep_2;
+	phtread_t encargado, atencionDom;
+	
+	//Inicializacion de los MUTEX
+	pthread_mutex_init(&mutex_Log, NULL);
+	pthread_mutex_init(&mutex_Clientes, NULL);
+	pthread_mutex_init(&mutex_Colicitudes, NULL);
+	pthread_mutex_init(&mutex_TerminarPrograma, NULL);
 
 	//Iniciamos hilos
 	pthread_create(&tecnico_1, NULL, accionesTecnico, NULL);
 	pthread_create(&tecnico_2, NULL, accionesTecnico, NULL);
-	pthread_create(&resprep_1, NULL, accionesTecnico, NULL);
-	pthread_create(&resprep_2, NULL, accionesTecnico, NULL);
+	pthread_create(&respRep_1, NULL, accionesTecnico, NULL);
+	pthread_create(&respRep_2, NULL, accionesTecnico, NULL);
 	pthread_create(&encargado, NULL, accionesEncargado, NULL);
 	pthread_create(&atencionDom, NULL, accionesTecnicoDomiciliario, NULL);
 
 	//Armar señales
-	struct sigaction ss = {0};
+	struct sigaction ss;
 
 	ss.sa_handler = nuevoCliente;
 	sigaction (SIGUSR1, &ss, NULL);
@@ -127,14 +157,14 @@ int main (int argc, char *argv[]){
 	ss.sa_handler = terminarPrograma;
 	sigaction (SIGINT, &SS, NULL);
 
-	//Inicializamos valores de contadores
+	//inicializamos contadores declarados de manera global
 	contCliRed = 0;
 	contCliApp = 0;	
 	contCliSolicitud = 0;
 	terminarPrograma = 0;
 
-	//Inicializar de forma dinamica el tamaño de la lista de clientes.
-	clientes = (struct cliente*) malloc(NUMCLIENTES*sizeof(struct cliente));
+	//Definimos el tamaño de la lista clientes de forma dinamica
+	clientes = (struct cliente*) malloc(NUM_CLIENTES*sizeOf(struct cliente));
 
 	for(int i=0; i<NUMCLIENTES; i++){
 		clientes[i].id = NULL;
