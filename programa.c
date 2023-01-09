@@ -186,17 +186,22 @@ int main (int argc, char *argv[]){
 	//Espera infinita para señales.
 	while(1){
 
-		pthread_mutex_lock(&mutex_terminarPrograma);
+		pthread_mutex_lock(&mutex_TerminarPrograma);
 
-		//Mientras terminarPrograma tenga valor 0, seguimos ejecutando el programa.
+		//Mientras terminarPrograma vale 0, seguimos ejecutando el programa
 		if(terminarPrograma == 0){
-			pthread_mutex_unlock(&mutex_terminarPrograma);
+			pthread_mutex_unlock(&mutex_TerminarPrograma);
+			
+			//Nos quedamos a la espera de una señal
 			pause();
+		}
 
-		//Para terminar el programa, los hilos incrementarán el contador terminarPrograma desde su valor=1 hasta 7 (6 hilos).	
-		}else if(terminarPrograma == 7){
-			pthread_mutex_unlock(&mutex_terminarPrograma);
-			writeLogMessage("*SISTEMA*: ", "FIN EJECUCIÓN");
+		/* Para terminar el programa, los hilos incrementarán el contador
+		 * terminarPrograma desde su valor=1 hasta 7 (6 hilos).
+		 */
+		else if(terminarPrograma == 7){
+			pthread_mutex_unlock(&mutex_TerminarPrograma);
+			writeLogMessage("*SISTEMA*: ", "FIN EJECUCION")
 			exit(0);
 		}
 	}
@@ -204,8 +209,8 @@ int main (int argc, char *argv[]){
 
 void nuevoCliente(int sig){
 
-	pthread_mutex_lock(&terminarPrograma);
-	//Comprobamos si puden llegar más solicitudes.
+	pthread_mutex_lock(&mutex_TerminarPrograma);
+	//Comprobamos si pueden llegar más solicitudes.
 	if(terminarPrograma==1){
 		pthread_mutex_unlock(&terminarPrograma);
 		printf("SISTEMA: Terminando programa. Solicitud de nuevo cliente rechazada.\n");
