@@ -770,7 +770,7 @@ void *accionesTecnicoDomiciliario(void *arg){
 
 		/* Se avisa a los que esperaban por solicitud domiciliaria que 
 		 * se ha finalizado la atencion.
-		 */
+		*/
 		for(int i=0; i<contCliCola; i++){
 
 			pthread_mutex_lock(&mutex_solicitudes);
@@ -790,7 +790,7 @@ void *accionesTecnicoDomiciliario(void *arg){
 		}
 		pthread_mutex_unlock(&mutex_terminarPrograma);
 	
-	}while(1)
+	}while(1);
 }
 
 // Definimos la funcion terminarPorgrama
@@ -864,7 +864,7 @@ int buscarCliente(char *id){
  * eliminado de la cola de clientes
  * Intercambiando posiciones con el cliente 
  * a la derecha y poniendo a NULL el último.
- */
+*/
 void eliminarCliente(char *id){
 	int posicion = buscarCliente(id);
 	struct cliente ultimo = {};
