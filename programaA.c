@@ -135,6 +135,7 @@ int main (int argc, char *argv[]){
 	contCliRed = 0;
 	contCliApp = 0;	
 	contCliSolicitud = 0;
+	contCliCola = 0;
 	varTerminarPrograma = 0;
 
 	//Inicializar de forma dinamica el tamaño de la lista de clientes.
@@ -168,7 +169,9 @@ int main (int argc, char *argv[]){
 		//Para terminar el programa, los hilos incrementarán el contador varTerminarPrograma desde su valor=1 hasta 7 (6 hilos).	
 		}else if(varTerminarPrograma == 7){
 			pthread_mutex_unlock(&mutex_terminarPrograma);
+			printf("SISTEMA: FIN EJECUCIÓN\n");
 			writeLogMessage("*SISTEMA*: ", "FIN EJECUCIÓN");
+			free(clientes);
 			exit(0);
 		}
 	}
@@ -222,10 +225,6 @@ void nuevoCliente(int sig){
 				pthread_t nuevoCliente;
 				pthread_create(&nuevoCliente, NULL, accionesCliente, (void*)nuevoIdApp);
 
-				//Imprimimos por pantalla y escribimos en el log.
-				printf("SISTEMA: Nuevo cliente de APP añadido a la lista.\n");
-				writeLogMessage("*SISTEMA*: ", "Nuevo cliente de APP añadido a la lista.");
-
 			}else if(sig == SIGUSR2){
 
 				//Incrementamos contador de clientes de RED.
@@ -253,9 +252,6 @@ void nuevoCliente(int sig){
 				pthread_t nuevoCliente;
 				pthread_create(&nuevoCliente, NULL, accionesCliente, (void*)nuevoIdRed);
 
-				//Imprimimos por pantalla y escribimos en el log.
-				printf("SISTEMA: Nuevo cliente de RED añadido a la lista.\n");
-				writeLogMessage("*SISTEMA*: ", "Nuevo cliente de RED añadido a la lista.");
 			}
 
 		//Lista de clientes llena.	
@@ -277,15 +273,22 @@ void *accionesCliente(void *arg){
 	int espera = 0;
 	int cansado = 0;
 
-	//Guardamos en log hora y cliente. 
-	printf("%s: Nueva solicitud aceptada.\n", id);
-	writeLogMessage(id, "Nueva solicitud aceptada.");
-
 	pthread_mutex_lock(&mutex_clientes);
 	posicion = buscarCliente(id);
 	atendido = clientes[posicion].atendido;
 	tipo = clientes[posicion].tipo;
 	pthread_mutex_unlock(&mutex_clientes);
+
+	if(tipo==0){
+		printf("%d\n", tipo);
+		printf("%s: Entro al sistema por problemas de APP.\n", id);
+		writeLogMessage(id, "Entro al sistema por problemas de APP.");
+	}
+	else{
+		printf("%d\n", tipo);
+		printf("%s: Entro al sistema por problemas de RED.\n", id);
+		writeLogMessage(id, "Entro al sistema por problemas de RED.");
+	}
 
 	do{
 
@@ -330,8 +333,8 @@ void *accionesCliente(void *arg){
 			}else if(numAleatorio <=35){
 
 				//Escribimos en el log que abandona.
-				printf("%s: Ha perdido la conexion. Abandono.\n", id);
-				writeLogMessage(id, "Ha perdido la conexion. Abandono.");
+				printf("%s: He perdido la conexion. Abandono.\n", id);
+				writeLogMessage(id, "He perdido la conexion. Abandono.");
 
 				//Eliminamos al cliente de la cola de clientes.
 				pthread_mutex_lock(&mutex_clientes);
@@ -366,8 +369,8 @@ void *accionesCliente(void *arg){
 
 		if(numAleatorioRed <=30){
 
-			printf("%s: Solicito atencion domiciliaria.\n", id);
-			writeLogMessage(id, "Solicito atencion domiciliaria.");
+			printf("%s:  Solicito atencion domiciliaria.\n", id);
+			writeLogMessage(id, " Solicito atencion domiciliaria.");
 
 			//0, fuera de lista domiciliaria; 1, dentro lista.
 			int dentroListaDom = 0;
@@ -384,8 +387,8 @@ void *accionesCliente(void *arg){
 					dentroListaDom = 1;
 
 					//I, Escribimos en el log que espera para ser atendido.
-					printf("%s: Espero para ser atendido por atencion domiciliaria.\n", id);
-					writeLogMessage(id, "Espero para ser atendido por atencion domiciliaria.");
+					printf("%s:  Espero para ser atendido por atencion domiciliaria.\n", id);
+					writeLogMessage(id, " Espero para ser atendido por atencion domiciliaria.");
 
 					//II, Cambiamos el valor de solcitud por 1.
 					pthread_mutex_lock(&mutex_clientes);
@@ -407,8 +410,8 @@ void *accionesCliente(void *arg){
 					pthread_cond_wait(&cond_domiciliaria, &mutex_solicitudes);
 
 					//V, Comunicamos que su atención ha finalizado.
-					printf("%s: Fin de atencion domiciliaria.\n", id);
-					writeLogMessage(id, "Fin de atencion domiciliaria.");
+					printf("%s:  Fin de atencion domiciliaria.\n", id);
+					writeLogMessage(id, " Fin de atencion domiciliaria.");
 
 				}else{
 					//Si el numero de solicitudes pendientes de atencion dom. es mayor que 4, 
@@ -433,7 +436,6 @@ void *accionesCliente(void *arg){
 void *accionesTecnico(void *arg){
 
 	char *id = (char*)arg;
-	printf("Soy el empleado %s voy a trabajar. \n", id);
 
 	do{
 	//Tipo de llamada para tiempos de atencion.
@@ -477,7 +479,7 @@ void *accionesTecnico(void *arg){
 			pthread_mutex_unlock(&mutex_terminarPrograma);
 		
 		}else{
-			printf("Hoy me siento porductivo. Voy a atender a uno %s. ;)\n", idClientePorAtender);
+		
 			contCliAtendidos++;
 
 			//3. Calculamos el tiempo de atención.
@@ -495,14 +497,14 @@ void *accionesTecnico(void *arg){
 			writeLogMessage(id, "Finalizamos la atención al cliente.");
 
 			if(tipoDeLlamada <= 80){
-				printf("%s: Motivo: Todo en orden.\n", id);
-				writeLogMessage(id, "Motivo: Todo en orden.");
+				printf("%s: Todo en orden.\n", id);
+				writeLogMessage(id, "Todo en orden.");
 			}else if(tipoDeLlamada <= 90){
-				printf("%s: Motivo: Cliente mal identificado.\n", id);
-				writeLogMessage(id, "Motivo: Cliente mal identificado.");
+				printf("%s: Cliente mal identificado.\n", id);
+				writeLogMessage(id, "Cliente mal identificado.");
 			}else{
-				printf("%s: Motivo: Compañia erronea.\n", id);
-				writeLogMessage(id, "Motivo: Compañia erronea.");
+				printf("%s: Compañia erronea.\n", id);
+				writeLogMessage(id, "Compañia erronea.");
 				cliError = -1;
 			}
 
@@ -522,15 +524,135 @@ void *accionesTecnico(void *arg){
 
 			//9. Mira si toca descanso. (Cada 5 clientes atendidos).
 			if((strcmp(id, "tecnico_1") == 0 || strcmp(id, "tecnico_2") == 0) && contCliAtendidos >= 5){
+				
+				printf("%s: Me voy al descanso.\n", id);
+				writeLogMessage(id, "Me voy al descanso.");
+
 				sleep(5);
+
+				printf("%s: Vuelvo del descanso.\n", id);
+				writeLogMessage(id, "Vuelvo del descanso.");
+
 				contCliAtendidos = 0;
+
 			}else if((strcmp(id, "respprep_1") == 0 || strcmp(id, "respprep_2_2") == 0) && contCliAtendidos >= 6){
+				
+				printf("%s: Me voy al descanso.\n", id);
+				writeLogMessage(id, "Me voy al descanso.");
+
 				sleep(5);
+
+				printf("%s: Vuelvo del descanso.\n", id);
+				writeLogMessage(id, "Vuelvo del descanso.");
+
 				contCliAtendidos = 0;
 			}
 		}
 
 		//10. Vuelta a buscar el siguiente.
+	}while(1);
+}
+
+void *accionesEncargado(void *arg){
+
+	do{
+
+	//Tipo de llamada para tiempos de atencion.
+	int tipoDeLlamada = calcularAleatorio(1, 100);
+	int tiempoDeAtencion = 1;
+
+	int clienteError = 0;
+
+	char *idClientePorAtender = NULL;
+
+		//1. Buscar cliente para atender de su tipo, atendiendo a prioridad y sino FIFO. Ya ordenados en el nuevoCliente.
+		pthread_mutex_lock(&mutex_clientes);
+
+		//	Recorremos una primera vez la cola en busca de clientes de RED. 
+		for(int i=0; i<contCliCola; i++){
+			if(clientes[i].tipo == 1 && clientes[i].atendido==0 ){
+				idClientePorAtender = clientes[i].id;
+
+				//2. Cambiamos el flag de atendido.
+				clientes[i].atendido = 1;
+				break;
+			}
+		}
+
+		//Si no ha cogigo aún a nigún cliente, recorremos de nuevo en búsqueda de un cliente de APP.
+		if(idClientePorAtender == NULL){
+
+			for(int i=0; i<contCliCola; i++){
+				if(clientes[i].tipo == 0 && clientes[i].atendido==0 ){
+					idClientePorAtender = clientes[i].id;
+
+					//2. Cambiamos el flag de atendido.
+					clientes[i].atendido = 1;
+					break;
+				}
+			}
+		}
+
+		pthread_mutex_unlock(&mutex_clientes);
+
+		//No encontramos clientes, dormimos 3s.
+		if(idClientePorAtender == NULL){
+
+			sleep(3);
+
+			//Comprobamos la variable varTerminarPrograma. Si es mayor que uno, mataremos al hilo. (>=???)
+			pthread_mutex_lock(&mutex_terminarPrograma);
+			if(varTerminarPrograma > 1){
+				varTerminarPrograma++;
+				pthread_mutex_unlock(&mutex_terminarPrograma);
+				pthread_exit(NULL);
+			}
+			pthread_mutex_unlock(&mutex_terminarPrograma);
+
+		//Hemos encontrado cliente por atender.
+		}else{
+
+			//3. Calculamos el tiempo de atención.
+			tiempoDeAtencion = calcularTiempoAtencion(tipoDeLlamada);
+
+			//4. Guardamos en el log que comienza la atendion.
+			printf("Encargado: Comenzamos la atención al cliente.\n");
+			writeLogMessage("Encargado", "Comenzamos la atención al cliente.");
+
+			//5. Dormimos el tiempo de atención.
+			sleep(tiempoDeAtencion);
+
+			//6 y 7. Guardamos en el log que finaliza la atencion y el motivo.
+			printf("Encargado: Finalizamos la atención al cliente.\n");
+			writeLogMessage("Encargado", "Finalizamos la atención al cliente.");
+
+			if(tipoDeLlamada <= 80){
+				printf("Encargado: Motivo: Todo en orden.\n");
+				writeLogMessage("Encargado", "Motivo: Todo en orden.");
+			}else if(tipoDeLlamada <= 90){
+				printf("Encargado: Motivo: Cliente mal identificado.\n");
+				writeLogMessage("Encargado", "Motivo: Cliente mal identificado.");
+			}else{
+				printf("Encargado: Motivo: Compañia erronea.\n");
+				writeLogMessage("Encargado", "Motivo: Compañia erronea.");
+				clienteError = -1;
+			}
+
+			//8. Cambiamos el flag de atendido  
+			pthread_mutex_lock(&mutex_clientes);
+
+			for(int i=0; i<contCliCola; i++){
+
+				if(strcmp(clientes[i].id,idClientePorAtender) == 0){
+					clientes[i].atendido = 2;
+					clientes[i].solicitud = clienteError;
+					break;
+				}
+			}
+
+			pthread_mutex_unlock(&mutex_clientes);
+		}
+	//9. Vuelta a buscar el siguiente.
 	}while(1);
 }
 
@@ -607,109 +729,6 @@ void *accionesTecnicoDomiciliario(void *arg){
 	}while(1);
 }
 
-void *accionesEncargado(void *arg){
-
-	do{
-
-	//Tipo de llamada para tiempos de atencion.
-	int tipoDeLlamada = calcularAleatorio(1, 100);
-	int tiempoDeAtencion = 1;
-
-	int clienteError = 0;
-
-	char *idClientePorAtender = NULL;
-
-		//1. Buscar cliente para atender de su tipo, atendiendo a prioridad y sino FIFO. Ya ordenados en el nuevoCliente.
-		pthread_mutex_lock(&mutex_clientes);
-
-		//	Recorremos una primera vez la cola en busca de clientes de RED. 
-		for(int i=0; i<contCliCola; i++){
-			if(clientes[i].tipo == 1 && clientes[i].atendido==0 ){
-				idClientePorAtender = clientes[i].id;
-
-				//2. Cambiamos el flag de atendido.
-				clientes[i].atendido = 1;
-				break;
-			}
-		}
-
-		//Si no ha cogigo aún a nigún cliente, recorremos de nuevo en búsqueda de un cliente de APP.
-		if(idClientePorAtender == NULL){
-
-			for(int i=0; i<contCliCola; i++){
-				if(clientes[i].tipo == 0 && clientes[i].atendido==0 ){
-					idClientePorAtender = clientes[i].id;
-
-					//2. Cambiamos el flag de atendido.
-					clientes[i].atendido = 1;
-					break;
-				}
-			}
-		}
-
-		pthread_mutex_unlock(&mutex_clientes);
-
-		//No encontramos clientes, dormimos 3s.
-		if(idClientePorAtender == NULL){
-
-			sleep(3);
-
-			//Comprobamos la variable varTerminarPrograma. Si es mayor que uno, mataremos al hilo. (>=???)
-			pthread_mutex_lock(&mutex_terminarPrograma);
-			if(varTerminarPrograma > 1){
-				varTerminarPrograma++;
-				pthread_mutex_unlock(&mutex_terminarPrograma);
-				pthread_exit(NULL);
-			}
-			pthread_mutex_unlock(&mutex_terminarPrograma);
-
-		//Hemos encontrado cliente por atender.
-		}else{
-
-			//3. Calculamos el tiempo de atención.
-			tiempoDeAtencion = calcularTiempoAtencion(tipoDeLlamada);
-
-			//4. Guardamos en el log que comienza la atendion.
-			printf("Encargado: Comenzamos la atención al cliente.\n");
-			writeLogMessage("Encargado: ", "Comenzamos la atención al cliente.");
-
-			//5. Dormimos el tiempo de atención.
-			sleep(tiempoDeAtencion);
-
-			//6 y 7. Guardamos en el log que finaliza la atencion y el motivo.
-			printf("Encargado: Finalizamos la atención al cliente.\n");
-			writeLogMessage("Encargado: ", "Finalizamos la atención al cliente.");
-
-			if(tipoDeLlamada <= 80){
-				printf("Encargado: Motivo: Todo en orden.\n");
-				writeLogMessage("Encargado: ", "Motivo: Todo en orden.");
-			}else if(tipoDeLlamada <= 90){
-				printf("Encargado: Motivo: Cliente mal identificado.\n");
-				writeLogMessage("Encargado: ", "Motivo: Cliente mal identificado.");
-			}else{
-				printf("Encargado: Motivo: Compañia erronea.\n");
-				writeLogMessage("Encargado: ", "Motivo: Compañia erronea.");
-				clienteError = -1;
-			}
-
-			//8. Cambiamos el flag de atendido  
-			pthread_mutex_lock(&mutex_clientes);
-
-			for(int i=0; i<contCliCola; i++){
-
-				if(strcmp(clientes[i].id,idClientePorAtender) == 0){
-					clientes[i].atendido = 2;
-					clientes[i].solicitud = clienteError;
-					break;
-				}
-			}
-
-			pthread_mutex_unlock(&mutex_clientes);
-		}
-	//9. Vuelta a buscar el siguiente.
-	}while(1);
-}
-
 void terminarPrograma(int sig){
 	pthread_mutex_lock(&mutex_terminarPrograma);
 	//Variable terminarPrograma con valor 1, no deja que lleguen más solicitudes, prepara el final de programa.
@@ -761,12 +780,16 @@ int calcularAleatorio(int min, int max){
 
 int buscarCliente(char *id){
 
+	int posicion = 0;
+
 	for(int i=0; i<contCliCola; i++){
 		if(strcmp(clientes[i].id, id) == 0){
-			return i;
+			posicion = i;
+			break;
+
 		} 
 	}
-	return 99;
+	return posicion;
 }
 
 void eliminarCliente(char *id){
