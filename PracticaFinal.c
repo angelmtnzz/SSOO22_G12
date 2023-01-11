@@ -4,6 +4,44 @@
 // 				Saad Ali Hussain Kausar
 // 				Javier Álvarez Pintor
 
+//****1a modificacion***** El encargado y los empleados no descansan a la vez
+/* Declaramos un mutex y una variable global
+ * int enDescanso;
+   pthread_mutex_t mutex_descanso
+ */
+/*Inicializamos el mutex y la variable en el MAIN
+ * pthread_mutex_init (&mutex_descanso, NULL);
+   enDescanso = 0;
+ */
+/* En accionesEncargado se añaden las condiciones correspondientes
+ * mutex_lock(&mutex_descanso);
+ * if(enDescanso == 0){
+ 	enDescanso = 1;
+	mutex_unlock(&mutex_descanso);
+	sleep();
+	mutex_lock(&mutex_descanso);
+	enDescanso = 0;
+	mutex_unlock(&mutex_descanso);
+  }else{
+	mutex_unlock(&mutex_descanso);
+  }
+ */
+ /* En accionesTecnico se añaden las siguientes condiciones
+  * if(clientesAtendido >= 5){
+        mutex_lock(&mutex_descanso);
+ 	if(enDescanso == 0){
+ 		enDescanso = 1;
+		mutex_unlock(&mutex_descanso);
+		sleep();
+		mutex_lock(&mutex_descanso);
+		enDescanso = 0;
+		mutex_unlock(&mutex_descanso);
+ 	 }else{
+		mutex_unlock(&mutex_descanso);
+	 }
+   }else if() lo mismo para el responsable
+ */
+
 
 #include <stdio.h>
 #include <stdlib.h>
