@@ -4,16 +4,16 @@
 // 				Saad Ali Hussain Kausar
 // 				Javier Álvarez Pintor
 
-#include <pthread.h>
+
 #include <stdio.h>
 #include <stdlib.h>
-#include <unistd.h>
+#include <string.h>
+#include <pthread.h>
+#include <signal.h>
 #include <sys/types.h>
 #include <sys/wait.h>
-#include <signal.h>
-#include <ctype.h>
 #include <time.h>
-#include <string.h>
+#include <unistd.h>
 
 #define NUMCLIENTES 20
 #define MAXSOLDOMICILIO 4
@@ -28,7 +28,7 @@ pthread_mutex_t mutex_log, mutex_clientes, mutex_solicitudes, mutex_terminarProg
 //Creamos variable de condicion. Asociadas a un mutex.
 //	cond_clienteAtendido, asociado al mutex_clientes, espera a la señal del técnico.
 //	cond_domiciliaria, asociado co_solicitudes, ???.
-pthread_cond_t cond_clienteAtendido, cond_domiciliaria;
+pthread_cond_t cond_clienteAtendido, cond_domiciliaria, cond_finDomiciliaria;
 
 //Variables
 //	contCliRed, controlar numero de clientes de red. (Para dar numero al id)
@@ -127,9 +127,11 @@ int main (int argc, char *argv[]){
 	ss.sa_handler = nuevoCliente;
 	sigaction (SIGUSR1, &ss, NULL);
 	sigaction (SIGUSR2, &ss, NULL);
+	struct sigaction sa= {0};
 
-	ss.sa_handler = terminarPrograma;
-	sigaction (SIGINT, &ss, NULL);
+	sa.sa_handler = terminarPrograma;
+
+	sigaction (SIGINT, &sa, NULL);
 
 	//Inicializamos valores de contadores
 	contCliRed = 0;
@@ -154,7 +156,7 @@ int main (int argc, char *argv[]){
 	}
 
 	//Inicializar fichero log
-	writeLogMessage("*SISTEMA*: ", "NUEVA EJECUCIÓN");
+	writeLogMessage("SISTEMA: ", "NUEVA EJECUCIÓN");
 
 	//Espera infinita para señales.
 	while(1){
@@ -187,16 +189,15 @@ void nuevoCliente(int sig){
 		writeLogMessage("*SISTEMA*: ", "Terminando programa. Solicitud de nuevo cliente rechazada.");
 
 	//Si la variable es distinta de 1, quiere decir que es 0(ejecutando) o >1(matando hilos) y pueden seguir llegando solicitudes.
-	}else{
+	}else{	sprintf(clientes[contCliCola-1].id, "cliApp_%d", contCliApp);
 		pthread_mutex_unlock(&mutex_terminarPrograma);
 
 		//Comprobamos si hay sitio en la cola.
 		pthread_mutex_lock(&mutex_clientes);
 
-		//Lista de clientes con sitios libres.
+		//Lista de clientes con 	sprintf(clientes[contCliCola-1].id, "cliApp_%d", contCliApp);sitios libres.
 		if(contCliCola < 20){
 			contCliCola++;
-			pthread_mutex_unlock(&mutex_clientes);
 
 			if(sig == SIGUSR1){
 
@@ -211,11 +212,12 @@ void nuevoCliente(int sig){
 				int prioridadApp = calcularAleatorio(1, 10);
 
 				//Creamos el nuevo cliente de APP y añadimos sus parametros establecidos por el momento.
-				struct cliente clienteApp = {*nuevoIdApp, 0, 0, 0, prioridadApp};
 
 				//Añadimos el nuevo cliente de APP a la lista de clientes.
-				pthread_mutex_lock(&mutex_clientes);
-				clientes[contCliCola] = clienteApp;
+				clientes[contCliCola-1].prioridad = prioridadApp;
+				clientes[contCliCola-1].tipo = 0;
+				sprintf(clientes[contCliCola-1].id, "cliApp_%d", contCliApp);
+
 				pthread_mutex_unlock(&mutex_clientes);
 
 				//Reordenamos la lista en funcion de la prioridad.
@@ -223,7 +225,7 @@ void nuevoCliente(int sig){
 
 				//Inicializamos y creamos hilo para el nuevo cliente de APP.
 				pthread_t nuevoCliente;
-				pthread_create(&nuevoCliente, NULL, accionesCliente, (void*)nuevoIdApp);
+				pthread_create(&nuevoCliente, NULL, accionesCliente, (void*)&nuevoIdApp);
 
 			}else if(sig == SIGUSR2){
 
@@ -233,16 +235,16 @@ void nuevoCliente(int sig){
 				//Creamos ID para el nuevo cliente de RED.
 				char nuevoIdRed[10];
 				sprintf(nuevoIdRed, "cliRed_%d", contCliRed);
-
+				clientes[contCliCola-1].tipo = 1;
+				sprintf(clientes[contCliCola-1].id, "cliRed_%d", contCliRed);
 				//Generamos una prioridad para el nuevo cliente de RED.
 				int prioridadRed = calcularAleatorio(1, 10);
 
 				//Creamos el nuevo cliente de RED y añadimos sus parametros establecidos por el momento.
-				struct cliente clienteRed = {*nuevoIdRed, 0, 1, 0, prioridadRed};
 
 				//Añadimos el nuevo cliente de RED a la lista de clientes.
-				pthread_mutex_lock(&mutex_clientes);
-				clientes[contCliCola] = clienteRed;
+				clientes[contCliCola-1].prioridad = prioridadRed;
+
 				pthread_mutex_unlock(&mutex_clientes);
 
 				//Reordenamos la lista en funcion de la prioridad.
@@ -250,8 +252,10 @@ void nuevoCliente(int sig){
 
 				//Inicializamos y creamos hilo para el nuevo cliente de RED.
 				pthread_t nuevoCliente;
-				pthread_create(&nuevoCliente, NULL, accionesCliente, (void*)nuevoIdRed);
+				pthread_create(&nuevoCliente, NULL, accionesCliente, (void*)&nuevoIdRed);
 
+			}else{
+				pthread_mutex_unlock(&mutex_clientes);
 			}
 
 		//Lista de clientes llena.	
@@ -278,6 +282,8 @@ void *accionesCliente(void *arg){
 	atendido = clientes[posicion].atendido;
 	tipo = clientes[posicion].tipo;
 	pthread_mutex_unlock(&mutex_clientes);
+
+	printf("%d\n",posicion);
 
 	if(tipo==0){
 		printf("%d\n", tipo);
@@ -351,7 +357,7 @@ void *accionesCliente(void *arg){
 	}while(atendido == 0);
 
 	//Si están siendo atendidos...
-	if(atendido == 1){
+	while(atendido == 1){
 
 		printf("%s: Estoy siendo atendido.\n", id);
 		writeLogMessage(id, "Estoy siendo atendido.");	
@@ -360,6 +366,11 @@ void *accionesCliente(void *arg){
 		//	Wait debe realizarse con mutex cerrado.
 		//	El hilo se suspende hasta que otro señaliza la condición y el mutex asociado se desbloquea.
 		pthread_cond_wait(&cond_clienteAtendido, &mutex_clientes);
+
+		pthread_mutex_lock(&mutex_clientes);
+		posicion = buscarCliente(id);
+		atendido = clientes[posicion].atendido;
+		pthread_mutex_unlock(&mutex_clientes);
 	}
 
 
@@ -370,7 +381,7 @@ void *accionesCliente(void *arg){
 		if(numAleatorioRed <=30){
 
 			printf("%s:  Solicito atencion domiciliaria.\n", id);
-			writeLogMessage(id, " Solicito atencion domiciliaria.");
+			writeLogMessage(id, "Solicito atencion domiciliaria.");
 
 			//0, fuera de lista domiciliaria; 1, dentro lista.
 			int dentroListaDom = 0;
@@ -405,9 +416,9 @@ void *accionesCliente(void *arg){
 					}else{
 						pthread_mutex_unlock(&mutex_solicitudes);
 					}
-
+					pthread_mutex_lock(&mutex_solicitudes);
 					//IV, Bloqueamos a la espera de que clientes[posicion].solicitud=0 (Ya ha finalizado su atencion.
-					pthread_cond_wait(&cond_domiciliaria, &mutex_solicitudes);
+					pthread_cond_wait(&cond_finDomiciliaria, &mutex_solicitudes);
 
 					//V, Comunicamos que su atención ha finalizado.
 					printf("%s:  Fin de atencion domiciliaria.\n", id);
@@ -471,13 +482,17 @@ void *accionesTecnico(void *arg){
 		if(idClientePorAtender == NULL){
 			sleep(1);
 			pthread_mutex_lock(&mutex_terminarPrograma);
-			if(varTerminarPrograma > 1){
+			if(varTerminarPrograma > 0){
 				varTerminarPrograma++;
 				pthread_mutex_unlock(&mutex_terminarPrograma);
+
+				printf("%s: Me muero.\n", id);
+				writeLogMessage(id,"Me muero.");
+
 				pthread_exit(NULL);
+			}else{
+				pthread_mutex_unlock(&mutex_terminarPrograma);
 			}
-			pthread_mutex_unlock(&mutex_terminarPrograma);
-		
 		}else{
 		
 			contCliAtendidos++;
@@ -565,7 +580,7 @@ void *accionesEncargado(void *arg){
 
 	char *idClientePorAtender = NULL;
 
-		//1. Buscar cliente para atender de su tipo, atendiendo a prioridad y sino FIFO. Ya ordenados en el nuevoCliente.
+		//1. Buscar cliente para atender de varTerminarProgramsu tipo, atendiendo a prioridad y sino FIFO. Ya ordenados en el nuevoCliente.
 		pthread_mutex_lock(&mutex_clientes);
 
 		//	Recorremos una primera vez la cola en busca de clientes de RED. 
@@ -585,7 +600,6 @@ void *accionesEncargado(void *arg){
 			for(int i=0; i<contCliCola; i++){
 				if(clientes[i].tipo == 0 && clientes[i].atendido==0 ){
 					idClientePorAtender = clientes[i].id;
-
 					//2. Cambiamos el flag de atendido.
 					clientes[i].atendido = 1;
 					break;
@@ -602,13 +616,17 @@ void *accionesEncargado(void *arg){
 
 			//Comprobamos la variable varTerminarPrograma. Si es mayor que uno, mataremos al hilo. (>=???)
 			pthread_mutex_lock(&mutex_terminarPrograma);
-			if(varTerminarPrograma > 1){
+			if(varTerminarPrograma > 0){
 				varTerminarPrograma++;
 				pthread_mutex_unlock(&mutex_terminarPrograma);
-				pthread_exit(NULL);
-			}
-			pthread_mutex_unlock(&mutex_terminarPrograma);
 
+				printf("Encargado: Me muero.\n");
+				writeLogMessage("Encargado: ","Me muero.");
+
+				pthread_exit(NULL);
+			}else{
+				pthread_mutex_unlock(&mutex_terminarPrograma);
+			}
 		//Hemos encontrado cliente por atender.
 		}else{
 
@@ -627,14 +645,14 @@ void *accionesEncargado(void *arg){
 			writeLogMessage("Encargado", "Finalizamos la atención al cliente.");
 
 			if(tipoDeLlamada <= 80){
-				printf("Encargado: Motivo: Todo en orden.\n");
-				writeLogMessage("Encargado", "Motivo: Todo en orden.");
+				printf("Encargado: Todo en orden.\n");
+				writeLogMessage("Encargado", "Todo en orden.");
 			}else if(tipoDeLlamada <= 90){
-				printf("Encargado: Motivo: Cliente mal identificado.\n");
-				writeLogMessage("Encargado", "Motivo: Cliente mal identificado.");
+				printf("Encargado: Cliente mal identificado.\n");
+				writeLogMessage("Encargado", "Cliente mal identificado.");
 			}else{
-				printf("Encargado: Motivo: Compañia erronea.\n");
-				writeLogMessage("Encargado", "Motivo: Compañia erronea.");
+				printf("Encargado: Compañia erronea.\n");
+				writeLogMessage("Encargado", "Compañia erronea.");
 				clienteError = -1;
 			}
 
@@ -664,7 +682,17 @@ void *accionesTecnicoDomiciliario(void *arg){
 		pthread_mutex_lock(&mutex_solicitudes);
 
 		if(contCliSolicitud < 4){
-			pthread_mutex_unlock(&mutex_solicitudes);
+				pthread_mutex_lock(&mutex_terminarPrograma);
+			if(varTerminarPrograma > 0){
+				varTerminarPrograma++;
+				pthread_mutex_unlock(&mutex_terminarPrograma);
+
+				printf("Tecnico domiciliario: Me muero.\n");
+				writeLogMessage("Tecnico domiciliario: ","Me muero.");
+
+				pthread_exit(NULL);
+			}
+			pthread_mutex_unlock(&mutex_terminarPrograma);
 			pthread_cond_wait(&cond_domiciliaria, &mutex_solicitudes);
 		}else{
 			pthread_mutex_unlock(&mutex_solicitudes);
@@ -676,8 +704,12 @@ void *accionesTecnicoDomiciliario(void *arg){
 		writeLogMessage("Tecnico Domiciliario: ", "Comenzamos la atención al cliente.");
 
 		//3. Duerme un segundo por petición.
+		pthread_mutex_lock(&mutex_solicitudes);
+		int nSol = contCliSolicitud;
+		pthread_mutex_unlock(&mutex_solicitudes);
 
-		for(int i=0; i<4; i++){
+
+		for(int i=0; i<nSol; i++){
 
 			sleep(1);
 
@@ -718,9 +750,13 @@ void *accionesTecnicoDomiciliario(void *arg){
 
 		//Comprobamos si tenemos que, tras la ejecucion (???), tenemos que matar al hilo.
 		pthread_mutex_lock(&mutex_terminarPrograma);
-			if(varTerminarPrograma > 1){
+			if(varTerminarPrograma > 0){
 				varTerminarPrograma++;
 				pthread_mutex_unlock(&mutex_terminarPrograma);
+
+				printf("Tecnico domiciliario: Me muero.\n");
+				writeLogMessage("Tecnico domiciliario: ","Me muero.");
+
 				pthread_exit(NULL);
 			}
 			pthread_mutex_unlock(&mutex_terminarPrograma);
@@ -734,6 +770,9 @@ void terminarPrograma(int sig){
 	//Variable terminarPrograma con valor 1, no deja que lleguen más solicitudes, prepara el final de programa.
 	varTerminarPrograma = 1;
 	pthread_mutex_unlock(&mutex_terminarPrograma);
+	printf("SISTEMA: Se ha ininciado el fin de programa.\n");
+	writeLogMessage("SISTEMA: ","Se ha iniciado el fin del programa.");
+	pthread_cond_signal(&cond_domiciliaria);
 
 }
 
@@ -783,10 +822,10 @@ int buscarCliente(char *id){
 	int posicion = 0;
 
 	for(int i=0; i<contCliCola; i++){
-		if(strcmp(clientes[i].id, id) == 0){
+
+		if((strcmp(clientes[i].id, id)) == 0){
 			posicion = i;
 			break;
-
 		} 
 	}
 	return posicion;
