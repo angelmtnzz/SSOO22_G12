@@ -49,14 +49,13 @@ struct cliente{
 	int solicitud;
 	//Prioridad se asigna por FIFO.
 	int prioridad;
-}
+};
 
 //Inicializado lista de clientes
 struct cliente *clientes;
 
 //Fichero log donde se escribiran las acciones
-File *logFile;
-const char *NombreFichero = "RegistroAverias";
+FILE *logFile;
 
 //Declaramos funciones
 //nuevoCliente, crea nuevos clientes y los añade a la lista de clientes.
@@ -96,6 +95,11 @@ void eliminarCliente(char *id);
 int calcularTiempoAtencion(int tipoDeLlamada);
 
 int main (int argc, char *argv[]){
+
+	/* Menú para añadir clientes */
+	printf("Introduce 'kill -10 %d' en otro terminal para que llegue el cliente de tipo App \n",getpid());
+	printf("Introduce 'kill -12 %d' en otro terminal para que llegue el cliente de tipo Red \n",getpid());
+	printf("Introduce 'kill -2 %d' en otro terminal para finalizar el programa \n",getpid());
 
 	//Iniciamos semilla para aleatorios
 	srand(time(NULL));
@@ -137,7 +141,7 @@ int main (int argc, char *argv[]){
 	clientes = (struct cliente*) malloc(NUMCLIENTES*sizeof(struct cliente));
 
 	for(int i=0; i<NUMCLIENTES; i++){
-		clientes[i].id = NULL;
+		strcpy(clientes[i].id, "0");
 		//	solicitud: 0, no ha solicitado atencion domiciliaria; 1, ha solicitado.
 		clientes[i].solicitud = 0;
 		//	estado: 0, sin atender; 1, siendo atendido.
@@ -188,6 +192,7 @@ void nuevoCliente(int sig){
 
 		//Lista de clientes con sitios libres.
 		if(contCliCola < 20){
+			contCliCola++;
 			pthread_mutex_unlock(&mutex_clientes);
 
 			if(sig == SIGUSR1){
@@ -203,7 +208,7 @@ void nuevoCliente(int sig){
 				int prioridadApp = calcularAleatorio(1, 10);
 
 				//Creamos el nuevo cliente de APP y añadimos sus parametros establecidos por el momento.
-				struct cliente clienteApp = [nuevoIdApp, 0, 0, 0, prioridadApp];
+				struct cliente clienteApp = {*nuevoIdApp, 0, 0, 0, prioridadApp};
 
 				//Añadimos el nuevo cliente de APP a la lista de clientes.
 				pthread_mutex_lock(&mutex_clientes);
@@ -234,7 +239,7 @@ void nuevoCliente(int sig){
 				int prioridadRed = calcularAleatorio(1, 10);
 
 				//Creamos el nuevo cliente de RED y añadimos sus parametros establecidos por el momento.
-				struct cliente clienteRed = [nuevoIdRed, 0, 1, 0, prioridadRed];
+				struct cliente clienteRed = {*nuevoIdRed, 0, 1, 0, prioridadRed};
 
 				//Añadimos el nuevo cliente de RED a la lista de clientes.
 				pthread_mutex_lock(&mutex_clientes);
@@ -265,7 +270,7 @@ void nuevoCliente(int sig){
 
 void *accionesCliente(void *arg){
 
-	char *id = *(char*)arg;
+	char *id = (char*)arg;
 	int atendido = 0;
 	int tipo = -1;
 	int posicion = 0;
@@ -427,10 +432,10 @@ void *accionesCliente(void *arg){
 
 void *accionesTecnico(void *arg){
 
-	char *id = *(char*)arg;
+	char *id = (char*)arg;
+	printf("Soy el empleado %s voy a trabajar. \n", id);
 
 	do{
-
 	//Tipo de llamada para tiempos de atencion.
 	int tipoDeLlamada = calcularAleatorio(1, 100);
 	int tiempoDeAtencion = 1;
@@ -444,15 +449,15 @@ void *accionesTecnico(void *arg){
 		pthread_mutex_lock(&mutex_clientes);
 
 		for(int i=0; i<contCliCola; i++){
-
+			//printf("Tengo que aparentar que trabajo %s. ¿Lo intento con el cliente? Cliente atendido %d", id, clientes[i].tipo);
 			//2. Cambiamos flag atendido si somos tecnicos y el cliente es de tipo APP (tipo==0). 
-			if(clientes[i].tipo == 0 && (strcmp(id, "tecnico_1") == 0 || strcmp(id, "tecnico_2") == 0)){
+			if(clientes[i].tipo == 0 && clientes[i].atendido==0 && (strcmp(id, "tecnico_1") == 0 || strcmp(id, "tecnico_2") == 0)){
 				idClientePorAtender = clientes[i].id;
 				clientes[i].atendido = 1;
 				break;
 
 			//2.Cambiamos flag atendido si somos responsables de reapraciones y el cliente es de tipo RED (tipo==1).
-			}else if(clientes[i].tipo == 1 && (strcmp(id, "respprep_1") == 0 || strcmp(id, "resprep_2") == 0)){
+			}else if(clientes[i].tipo == 1 &&  clientes[i].atendido==0 && (strcmp(id, "respprep_1") == 0 || strcmp(id, "resprep_2") == 0)){
 				idClientePorAtender = clientes[i].id;
 				clientes[i].atendido = 1;
 				break;
@@ -463,7 +468,6 @@ void *accionesTecnico(void *arg){
 
 		if(idClientePorAtender == NULL){
 			sleep(1);
-
 			pthread_mutex_lock(&mutex_terminarPrograma);
 			if(varTerminarPrograma > 1){
 				varTerminarPrograma++;
@@ -473,7 +477,7 @@ void *accionesTecnico(void *arg){
 			pthread_mutex_unlock(&mutex_terminarPrograma);
 		
 		}else{
-
+			printf("Hoy me siento porductivo. Voy a atender a uno %s. ;)\n", idClientePorAtender);
 			contCliAtendidos++;
 
 			//3. Calculamos el tiempo de atención.
@@ -620,7 +624,7 @@ void *accionesEncargado(void *arg){
 
 		//	Recorremos una primera vez la cola en busca de clientes de RED. 
 		for(int i=0; i<contCliCola; i++){
-			if(clientes[i].tipo == 1){
+			if(clientes[i].tipo == 1 && clientes[i].atendido==0 ){
 				idClientePorAtender = clientes[i].id;
 
 				//2. Cambiamos el flag de atendido.
@@ -633,7 +637,7 @@ void *accionesEncargado(void *arg){
 		if(idClientePorAtender == NULL){
 
 			for(int i=0; i<contCliCola; i++){
-				if(clientes[i].tipo == 0){
+				if(clientes[i].tipo == 0 && clientes[i].atendido==0 ){
 					idClientePorAtender = clientes[i].id;
 
 					//2. Cambiamos el flag de atendido.
@@ -718,7 +722,7 @@ void reordenarListaClientes(){
 
 	pthread_mutex_lock(&mutex_clientes);
 
-	struct cliente clienteAux = [NULL, 0, 0, 0, 0];
+	struct cliente clienteAux = {0, 0, 0, 0, 0};
 
 	for(int i=0; i<contCliCola; i++){
 		for(int j=0; j<contCliCola-1; j++){
@@ -745,7 +749,7 @@ void writeLogMessage(char *id, char *msg) {
 
 	// Escribimos en el log
 	pthread_mutex_lock(&mutex_log);
-	logFile = fopen(logFileName, "a");
+	logFile = fopen("RegistroAverias.log", "a");
 	fprintf(logFile, "[%s] %s: %s\n", stnow, id, msg);
 	fclose(logFile);
 	pthread_mutex_unlock(&mutex_log);
@@ -768,7 +772,7 @@ int buscarCliente(char *id){
 void eliminarCliente(char *id){
 
 	int posicion = buscarCliente(id);
-	struct cliente ultimo = [NULL, 0, 0, 0, 0];
+	struct cliente ultimo = {0, 0, 0, 0, 0};
 
 	for(int i=posicion; i<contCliCola-1; i++){
 		clientes[i] = clientes[i+1];
